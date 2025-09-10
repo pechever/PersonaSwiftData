@@ -1,0 +1,157 @@
+import SwiftUI
+import SwiftData
+
+struct ContentView: View {
+    @Environment(\.modelContext) private var context
+    @Query private var personas: [Persona]
+    
+    @State private var nombre = ""
+    @State private var edad = ""
+    @State private var personaSeleccionada: Persona? // Para rastrear la persona en edición
+    @State private var mostrarEditar = false // Controla la presentación de la hoja de edición
+
+    var body: some View {
+        NavigationView {
+            VStack {
+                // Formulario para nueva persona
+                HStack {
+                    TextField("Nombre", text: $nombre)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    TextField("Edad", text: $edad)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .keyboardType(.numberPad)
+                    Button("Agregar") {
+                        if let edadInt = Int(edad) {
+                            let nuevaPersona = Persona(nombre: nombre, edad: edadInt)
+                            context.insert(nuevaPersona)
+                            try? context.save()
+                            nombre = ""
+                            edad = ""
+                        }
+                    }
+                }.padding()
+
+                // Lista de personas
+                List {
+                    ForEach(personas) { persona in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(persona.nombre).font(.headline)
+                                Text("Edad: \(persona.edad)")
+                            }
+                            Spacer()
+                            // Botón de Editar
+                            Button(action: {
+                                personaSeleccionada = persona
+                                nombre = persona.nombre
+                                edad = String(persona.edad)
+                                mostrarEditar = true
+                            }) {
+                                Text("Editar")
+                                    .foregroundColor(.blue)
+                                    .padding(.vertical, 5)
+                                    .padding(.horizontal, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 5)
+                                            .stroke(Color.blue, lineWidth: 1)
+                                    )
+                            }
+                            // Botón de Delete
+                            Button(action: {
+                                eliminarPersona(persona: persona)
+                            }) {
+                                Text("Delete")
+                                    .foregroundColor(.red)
+                                    .padding(.vertical, 5)
+                                    .padding(.horizontal, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 5)
+                                            .stroke(Color.red, lineWidth: 1)
+                                    )
+                            }
+                        }
+                    }
+                    .onDelete(perform: eliminarPersona(at:))
+                }
+            }
+            .navigationTitle("Personas")
+            // Hoja para editar persona
+            .sheet(isPresented: $mostrarEditar) {
+                EditarPersonaView(
+                    persona: $personaSeleccionada,
+                    nombre: $nombre,
+                    edad: $edad,
+                    onSave: {
+                        if let persona = personaSeleccionada, let edadInt = Int(edad) {
+                            persona.nombre = nombre
+                            persona.edad = edadInt
+                            try? context.save()
+                        }
+                        nombre = ""
+                        edad = ""
+                        mostrarEditar = false
+                    },
+                    onCancel: {
+                        nombre = ""
+                        edad = ""
+                        mostrarEditar = false
+                    }
+                )
+            }
+        }
+    }
+    
+    // Función para eliminar una persona específica
+    private func eliminarPersona(persona: Persona) {
+        context.delete(persona)
+        try? context.save()
+    }
+    
+    // Función para eliminar usando el gesto de deslizar
+    private func eliminarPersona(at offsets: IndexSet) {
+        for index in offsets {
+            let persona = personas[index]
+            context.delete(persona)
+        }
+        try? context.save()
+    }
+}
+
+// Vista para editar una persona
+struct EditarPersonaView: View {
+    @Binding var persona: Persona?
+    @Binding var nombre: String
+    @Binding var edad: String
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        NavigationView {
+            VStack {
+                TextField("Nombre", text: $nombre)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+                TextField("Edad", text: $edad)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .keyboardType(.numberPad)
+                    .padding()
+                HStack {
+                    Button("Cancelar") {
+                        onCancel()
+                    }
+                    .foregroundColor(.red)
+                    .padding()
+                    
+                    Spacer()
+                    
+                    Button("Guardar") {
+                        onSave()
+                    }
+                    .foregroundColor(.blue)
+                    .padding()
+                }
+            }
+            .navigationTitle("Editar Persona")
+        }
+    }
+}
